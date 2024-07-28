@@ -33,7 +33,7 @@ def process_query(query):
         "query_type": "travel_duration" or "out_of_scope"
         "origin":"extracted origin",
         "destination":"extracted destination",
-        "original_mode":"original mode mentioned by the user (if any)",
+        "original_mode":"original mode of transport mentioned by the user (if any)",
         "mode": "mapped mode of transport (driving, walking, bicycling, or transit)",
         "out_of_scope_reason": "Brief explanation if query is out of scope"
     }}
@@ -181,38 +181,25 @@ def get_nearby_places(location, query):
         return []
 
 
-# # Predefined examples
-# examples = [
-#     "What is the current travel duration by car between Filoli Historic House & Garden, Woodside, CA to Pulgas Water Temple, Redwood City, CA?",
-#     "I want to bike from Shoreline Amphitheatre in Mountain View to the Computer History Museum. How long will it take?",
-#     "time to travel from Chez Panisse to Mezzo in Berkeley",
-#     "How long will it take me to bike from the Ferry Building in San Francisco to Walgreens?"
-# ]
-# # Streamlit UI
-# st.title("Travel Duration Query Assistant")
-#
-# # Dropdown for predefined examples
-# selected_example = st.selectbox("Choose a predefined example:", [""] + examples)
-#
-# # Text input for custom query
-# query = st.text_input("Or enter your travel duration query:", value=selected_example)
-#
-# if st.button("Get Answer"):
-#     if query:
-#         response = process_query(query)
-#         st.write(response)
-#     else:
-#         st.write("Please enter a query.")
+# Predefined examples
+examples = [
+    "What is the current travel duration by car between Filoli Historic House & Garden, Woodside, CA to Pulgas Water Temple, Redwood City, CA?",
+    "I want to bike from Shoreline Amphitheatre in Mountain View to the Computer History Museum. How long will it take?",
+    "time to travel from Chez Panisse to Mezzo in Berkeley",
+    "How long will it take me to bike from the Ferry Building in San Francisco to Walgreens?"
+]
+# Streamlit UI
+st.title("Travel Duration Query Assistant")
 
+# Dropdown for predefined examples
+selected_example = st.selectbox("Choose a predefined example:", [""] + examples)
 
-def main():
-    while True:
-        query = input("Enter your travel duration query (or 'quit' to exist):")
-        if query.lower() == 'quit':
-            break
+# Text input for custom query
+query = st.text_input("Or enter your travel duration query:", value=selected_example)
+
+if st.button("Get Answer"):
+    if query:
         response = process_query(query)
-        print(response)
-
-
-if __name__ == "__main__":
-    main()
+        st.write(response)
+    else:
+        st.write("Please enter a query.")
