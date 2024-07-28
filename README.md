@@ -23,9 +23,9 @@ GOOGLE_MAPS_API_KEY=your_google_maps_api_key
 
 Run the application:
 ```
-python main.py
+streamlit run main_w_UI.py
 ```
-Enter your travel duration query when prompted. Type 'quit' to exit the application.
+Enter your travel duration query and click on `Get Answer` button.
 
 Example queries:
 - What is the current travel duration by car between Filoli Historic House & Garden, Woodside, CA to Pulgas Water Temple, Redwood City, CA?
