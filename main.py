@@ -33,15 +33,15 @@ def process_query(query):
         "query_type": "travel_duration" or "out_of_scope"
         "origin":"extracted origin",
         "destination":"extracted destination",
-        "original_mode":"original mode mentioned by the user (if any)"
-        "mode": "mapped mode of transport (driving, walking, bicycling, or transit)"
+        "original_mode":"original mode mentioned by the user (if any)",
+        "mode": "mapped mode of transport (driving, walking, bicycling, or transit)",
         "out_of_scope_reason": "Brief explanation if query is out of scope"
     }}
     
     Ensure your response contains only the JSON object, with no additional text before or after.
     """
     extraction_response = openai.ChatCompletion.create(
-        model="gpt-4o",
+        model="gpt-3.5-turbo",
         messages=[
             {"role": "system", "content": "You are a helpful assistant that extracts travel information from queries."},
             {"role": "user", "content": extraction_prompt}
@@ -72,15 +72,16 @@ def process_query(query):
 
     origin = get_coordinates(extracted_info['origin'])
     destination = get_coordinates(extracted_info['destination'])
+
     if not origin or not destination:
         error_prompt = f"""
-        Generate a helpful response for a user whose query couldn't be processed due to location issues. 
-        Origin: {extracted_info['origin']} {'(Not found)' if not origin else '(Found)'} 
-        Destination: {extracted_info['destination']} {'(Not found)' if not destination else '(Found)'} 
-        
-        Explain that one or both locations couldn't be found. If it's a generic location like 'Walmart', suggest adding more details like city, state, or a specific address. Provide an example of a more specific query that would work better. 
-        
-        Keep the response friendly and helpful. 
+        Generate a helpful response for a user whose query couldn't be processed due to location issues.
+        Origin: {extracted_info['origin']} {'(Not found)' if not origin else '(Found)'}
+        Destination: {extracted_info['destination']} {'(Not found)' if not destination else '(Found)'}
+
+        Explain that one or both locations couldn't be found. If it's a generic location like 'Walmart', suggest adding more details like city, state, or a specific address. Provide an example of a more specific query that would work better.
+
+        Keep the response friendly and helpful.
         """
         error_response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
@@ -88,12 +89,38 @@ def process_query(query):
                        "content": "You are a helpful assistant that guides users in formulating clear travel queries."},
                       {"role": "user",
                        "content": error_prompt}])
-        return error_response.choices[0].message['content'].strip()
+        response = error_response.choices[0].message['content'].strip()
+
+        if not origin:
+            if destination:
+                nearby_origins = get_nearby_places(destination, extracted_info['origin'])
+                if nearby_origins:
+                    response += "\n\nHere are three suggestions for your origin location:\n"
+                    for i, place in enumerate(nearby_origins, 1):
+                        response += f"{i}. {place['name']} - {place['vicinity']}\n"
+                    updated_query = query.replace(extracted_info['origin'],
+                                                  nearby_origins[0]['name'] + nearby_origins[0]['vicinity'])
+                    response += f"\nIf you pick the first origin location:\n{process_query(updated_query)}"
+            else:
+                return "I'm sorry I couldn't find one or both of the locations you specified."
+
+        if not destination:
+            if origin:
+                nearby_destinations = get_nearby_places(origin, extracted_info['destination'])
+                if nearby_destinations:
+                    response += "\n\nHere are three suggestions for your destination location:\n"
+                    for i, place in enumerate(nearby_destinations, 1):
+                        response += f"{i}. {place['name']} - {place['vicinity']}\n"
+                    updated_query = query.replace(extracted_info['destination'],
+                                                  nearby_destinations[0]['name'] + nearby_destinations[0]['vicinity'])
+                    response += f"\nIf you pick the first destination location:\n{process_query(updated_query)}"
+            else:
+                return "I'm sorry I couldn't find one or both of the locations you specified."
+
+        return response
+
     if extracted_info['mode'] not in ["driving", "walking", "bicycling", "transit"]:
         return "I'm sorry, but the mode of transportation you selected is not supported. Please choose from one of the following options: driving, walking, bicycling, or transit."
-
-    if not origin:
-        return "I'm sorry I couldn't find one or both of the locations you specified."
 
     duration = get_travel_duration(origin, destination, extracted_info['mode'])
     if not duration:
@@ -145,25 +172,47 @@ def get_travel_duration(origin, destination, mode):
         return None
 
 
-# Predefined examples
-examples = [
-    "What is the current travel duration by car between Filoli Historic House & Garden, Woodside, CA to Pulgas Water Temple, Redwood City, CA?",
-    "I want to bike from Shoreline Amphitheatre in Mountain View to the Computer History Museum. How long will it take?",
-    "time to travel from Chez Panisse to Mezzo in Berkeley",
-    "How long will it take me to bike from the Ferry Building in San Francisco to Walgreens?"
-]
-# Streamlit UI
-st.title("Travel Duration Query Assistant")
+def get_nearby_places(location, query):
+    try:
+        result = gmaps.places_nearby(location=location, radius=5000, keyword=query)
+        return result['results'][:3]  # Return top 3 results
+    except Exception as e:
+        print(f"Error finding nearby places: {e}")
+        return []
 
-# Dropdown for predefined examples
-selected_example = st.selectbox("Choose a predefined example:", [""] + examples)
 
-# Text input for custom query
-query = st.text_input("Or enter your travel duration query:", value=selected_example)
+# # Predefined examples
+# examples = [
+#     "What is the current travel duration by car between Filoli Historic House & Garden, Woodside, CA to Pulgas Water Temple, Redwood City, CA?",
+#     "I want to bike from Shoreline Amphitheatre in Mountain View to the Computer History Museum. How long will it take?",
+#     "time to travel from Chez Panisse to Mezzo in Berkeley",
+#     "How long will it take me to bike from the Ferry Building in San Francisco to Walgreens?"
+# ]
+# # Streamlit UI
+# st.title("Travel Duration Query Assistant")
+#
+# # Dropdown for predefined examples
+# selected_example = st.selectbox("Choose a predefined example:", [""] + examples)
+#
+# # Text input for custom query
+# query = st.text_input("Or enter your travel duration query:", value=selected_example)
+#
+# if st.button("Get Answer"):
+#     if query:
+#         response = process_query(query)
+#         st.write(response)
+#     else:
+#         st.write("Please enter a query.")
 
-if st.button("Get Answer"):
-    if query:
+
+def main():
+    while True:
+        query = input("Enter your travel duration query (or 'quit' to exist):")
+        if query.lower() == 'quit':
+            break
         response = process_query(query)
-        st.write(response)
-    else:
-        st.write("Please enter a query.")
+        print(response)
+
+
+if __name__ == "__main__":
+    main()
