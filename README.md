@@ -23,7 +23,7 @@ GOOGLE_MAPS_API_KEY=your_google_maps_api_key
 
 Run the application:
 ```
-streamlit run main_w_UI.py
+streamlit run main.py
 ```
 Enter your travel duration query and click on `Get Answer` button.
 
