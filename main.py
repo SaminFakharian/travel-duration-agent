@@ -181,22 +181,15 @@ def get_nearby_places(location, query):
         return []
 
 
-# Predefined examples
 examples = [
     "What is the current travel duration by car between Filoli Historic House & Garden, Woodside, CA to Pulgas Water Temple, Redwood City, CA?",
     "I want to bike from Shoreline Amphitheatre in Mountain View to the Computer History Museum. How long will it take?",
     "time to travel from Chez Panisse to Mezzo in Berkeley",
     "How long will it take me to bike from the Ferry Building in San Francisco to Walgreens?"
 ]
-# Streamlit UI
 st.title("Travel Duration Query Assistant")
-
-# Dropdown for predefined examples
 selected_example = st.selectbox("Choose a predefined example:", [""] + examples)
-
-# Text input for custom query
 query = st.text_input("Or enter your travel duration query:", value=selected_example)
-
 if st.button("Get Answer"):
     if query:
         response = process_query(query)
