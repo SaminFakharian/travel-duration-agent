@@ -13,31 +13,31 @@ gmaps = googlemaps.Client(key=os.getenv("GOOGLE_MAPS_API_KEY"))
 
 def process_query(query):
     extraction_prompt = f"""
-    Extraction the following information from the query:
+    Extract the following information from the query:
     1. Origin location
     2. Destination location
     3. Model of transport (default to 'driving' if not specified.)
-    Important: Map the mode of transportation to one of these four options: driving, walking, bicycling, or transit. Use the following guidelines: 
+    Important: Map the mode of transportation to one of these five options: driving, walking, bicycling, vtol or transit. Use the following guidelines: 
     - Map car, automobile, drive, vehicle, motor to "driving" 
     - Map walk, on foot, pedestrian, stroll, hike to "walking" 
     - Map bike, bicycle, cycle, cycling, pedal, biking to "bicycling" 
     - Map bus, train, subway, metro, public transport, tram, rail to "transit" 
     - If no mode is specified, default to "driving"
-    
+
     If the query is not about travel duration between two locations, or if it asks for information you can't provide (like specific traffic conditions, weather, or travel costs), classify it as "out_of_scope".
-    
+
     Query: "{query}"
-    
+
     Respond in JSON format:
     {{
         "query_type": "travel_duration" or "out_of_scope"
         "origin":"extracted origin",
         "destination":"extracted destination",
         "original_mode":"original mode of transport mentioned by the user (if any)",
-        "mode": "mapped mode of transport (driving, walking, bicycling, or transit)",
-        "out_of_scope_reason": "Brief explanation if query is out of scope"
+        "mode": "mapped mode of transport (driving, walking, bicycling, vtol or transit)",
+        "out_of_scope_reason": "Brief explanation if query is out of scope",
     }}
-    
+
     Ensure your response contains only the JSON object, with no additional text before or after.
     """
     extraction_response = openai.ChatCompletion.create(
@@ -55,11 +55,11 @@ def process_query(query):
     if extracted_info['query_type'] == 'out_of_scope':
         out_of_scope_prompt = f"""
         Generate a polite and informative response for an out-of-scope query. The user asked: "{query}" 
-        
+
         Explain that you can only provide travel durations between two locations using driving, walking, bicycling, or transit modes. 
         Briefly mention why their query is out of scope: {extracted_info['out_of_scope_reason']} 
         Provide an example of a query you can answer. 
-        
+
         Keep the response concise and friendly.
         """
         out_of_scope_response = openai.ChatCompletion.create(
@@ -119,12 +119,13 @@ def process_query(query):
 
         return response
 
-    if extracted_info['mode'] not in ["driving", "walking", "bicycling", "transit"]:
-        return "I'm sorry, but the mode of transportation you selected is not supported. Please choose from one of the following options: driving, walking, bicycling, or transit."
+    if extracted_info['mode'] not in ["driving", "walking", "bicycling", "transit", "vtol"]:
+        return "I'm sorry, but the mode of transportation you selected is not supported. Please choose from one of the following options: driving, walking, bicycling, vtol or transit."
 
     duration = get_travel_duration(origin, destination, extracted_info['mode'])
     if not duration:
-        return "I'm sorry I couldn't calculate the travel duration for specified route and mode of transport."
+        return f"I'm sorry I couldn't calculate the travel duration for specified route and mode of transport. Your specified mode of transport is {extracted_info['mode']}"
+    # uber_response=""
 
     response_prompt = f"""
     Generate a natural language response for the following travel query:
@@ -133,8 +134,8 @@ def process_query(query):
     Mode of Transport: {extracted_info['mode']}
     Original Model Mentioned: {extracted_info.get('original_mode', 'Not specified')}
     Travel Duration: {duration}
-    
-    The response should be concise and informative.
+
+    The response should be concise and informative. Ask the user if they want an Uber from their origin to destination.
     """
 
     response = openai.ChatCompletion.create(
@@ -144,7 +145,15 @@ def process_query(query):
             {"role": "user", "content": response_prompt}
         ]
     )
-    return response.choices[0].message.content.strip()
+    return response.choices[0].message.content.strip(), origin, destination, extracted_info['origin'], extracted_info[
+        'destination']
+
+
+def process_uber_query(origin, destination, actual_origin, actual_destination):
+    if not origin or not destination:
+        return "I'm sorry, I couldn't find one or both of the locations you specified for the Uber request."
+
+    return get_uber(origin, destination, actual_origin, actual_destination)
 
 
 def get_coordinates(location):
@@ -181,18 +190,49 @@ def get_nearby_places(location, query):
         return []
 
 
-examples = [
-    "What is the current travel duration by car between Filoli Historic House & Garden, Woodside, CA to Pulgas Water Temple, Redwood City, CA?",
-    "I want to bike from Shoreline Amphitheatre in Mountain View to the Computer History Museum. How long will it take?",
-    "time to travel from Chez Panisse to Mezzo in Berkeley",
-    "How long will it take me to bike from the Ferry Building in San Francisco to Walgreens?"
-]
-st.title("Travel Duration Query Assistant")
-selected_example = st.selectbox("Choose a predefined example:", [""] + examples)
-query = st.text_input("Or enter your travel duration query:", value=selected_example)
-if st.button("Get Answer"):
-    if query:
-        response = process_query(query)
-        st.write(response)
-    else:
-        st.write("Please enter a query.")
+def get_uber(origin, destination, actual_origin, actual_destination):
+    return f"Your Uber has been requested for {actual_origin} to {actual_destination}"
+
+
+def main():
+    st.title("Travel Duration Query Assistant")
+    examples = [
+        "What is the current travel duration by car between Filoli Historic House & Garden, Woodside, CA to Pulgas Water Temple, Redwood City, CA?",
+        "I want to bike from Shoreline Amphitheatre in Mountain View to the Computer History Museum. How long will it take?",
+        "time to travel from Chez Panisse to Mezzo in Berkeley",
+        "How long will it take me to bike from the Ferry Building in San Francisco to Walgreens?"
+    ]
+
+    selected_example = st.selectbox("Choose a predefined example:", [""] + examples)
+    query = st.text_input("Or enter your travel duration query:", value=selected_example)
+    # to be able to show the Uber result after answer given for this query we need to have session
+    if 'answer_given' not in st.session_state:
+        st.session_state.answer_given = False
+    if st.button("Get Answer"):
+        if query:
+            response, origin, destination, actual_origin, actual_destination = process_query(query)
+            st.write(response)
+            st.session_state.query_results = {
+                "origin": origin,
+                "destination": destination,
+                "actual_origin": actual_origin,
+                "actual_destination": actual_destination
+            }
+            st.session_state.answer_given = True
+        else:
+            st.write("Please enter a query.")
+
+    if st.session_state.answer_given:
+        if st.button("Get Uber"):
+            if hasattr(st.session_state, 'query_results'):
+                uber_response = process_uber_query(
+                    st.session_state.query_results["origin"],
+                    st.session_state.query_results["destination"],
+                    st.session_state.query_results["actual_origin"],
+                    st.session_state.query_results["actual_destination"]
+                )
+                st.write(uber_response)
+
+
+if __name__ == "__main__":
+    main()
